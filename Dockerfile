@@ -10,4 +10,4 @@ RUN npm install
 COPY . .
 
 # Run node directly. No need for xvfb-run in headless mode.
-CMD ["node", "goldWatcher.js"]
+CMD ["node", "goldWatcherFinal.js"]
