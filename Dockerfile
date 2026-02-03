@@ -7,6 +7,4 @@ RUN npm install
 
 COPY . .
 
-ENV NODE_ENV=production
-
 CMD ["xvfb-run", "-a", "node", "goldWatcher.js"]
