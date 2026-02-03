@@ -1,11 +1,11 @@
 const { chromium } = require("playwright");
 const axios = require("axios");
 const fs = require("fs");
-
+const cron = require("node-cron");
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
-const FILE = "lastPrices.json";
+const FILE = "/tmp/lastPrices.json";
 
 async function sendTelegram(message) {
   try {
@@ -21,9 +21,9 @@ async function sendTelegram(message) {
 
 async function scrapeGold() {
   const context = await chromium.launchPersistentContext(
-    "./chrome-profile",
+    "/tmp/chrome-profile",
     {
-      headless: false,       // IMPORTANT (use xvfb on server)
+      headless: false,
       channel: "chrome",
       args: ["--no-sandbox"],
     }
@@ -36,7 +36,7 @@ async function scrapeGold() {
     timeout: 60000,
   });
 
-  await page.waitForTimeout(7000);
+  await page.waitForTimeout(8000);
 
   const data = await page.evaluate(() => {
     const get = (id) => {
@@ -105,4 +105,13 @@ async function main() {
   }
 }
 
+console.log("Gold watcher started...");
+
+// Run once when server starts
 main();
+
+// Run once daily at 10:00 AM IST (04:30 UTC)
+cron.schedule("30 4 * * *", async () => {
+  console.log("Daily gold price check...");
+  await main();
+});
