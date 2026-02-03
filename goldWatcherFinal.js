@@ -18,56 +18,72 @@ async function sendTelegram(message) {
     console.log(err.response?.data || err.message);
   }
 }
-
 async function scrapeGold() {
+  // Use launchPersistentContext or just launch depending on if you truly need persistence
+  // In Docker/Railway, persistence in /tmp is lost on restart anyway.
   const context = await chromium.launchPersistentContext(
     "/tmp/chrome-profile",
     {
-      headless: false,
-      channel: "chrome",
-      args: ["--no-sandbox"],
+      headless: true, // <--- MUST BE TRUE FOR RAILWAY
+      // channel: "chrome", // <--- REMOVE THIS. Use the bundled Chromium.
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox", 
+        "--disable-dev-shm-usage" // Helps with memory in Docker
+      ], 
     }
   );
 
   const page = await context.newPage();
 
-  await page.goto("https://www.goodreturns.in/gold-rates/", {
-    waitUntil: "load",
-    timeout: 60000,
+  // Add a user agent so the site doesn't block the headless browser
+  await page.setExtraHTTPHeaders({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   });
 
-  await page.waitForTimeout(8000);
+  try {
+      await page.goto("https://www.goodreturns.in/gold-rates/", {
+        waitUntil: "domcontentloaded", // Faster than 'load'
+        timeout: 60000,
+      });
 
-  const data = await page.evaluate(() => {
-    const get = (id) => {
-      const priceEl = document.querySelector(`[id="${id}"]`);
-      if (!priceEl) return null;
+      // Reduced timeout, 8s is very long
+      await page.waitForTimeout(5000);
 
-      const container = priceEl.closest(".gold-each-container");
+      const data = await page.evaluate(() => {
+        const get = (id) => {
+          const priceEl = document.querySelector(`[id="${id}"]`);
+          if (!priceEl) return null;
 
-      const change = container.querySelector(".gold-stock p")?.innerText.trim();
-      const alt = container.querySelector(".gold-stock img")?.getAttribute("alt");
-      const dir = alt === "price-up" ? "🔼" : "🔽";
+          const container = priceEl.closest(".gold-each-container");
+          const change = container.querySelector(".gold-stock p")?.innerText.trim();
+          const alt = container.querySelector(".gold-stock img")?.getAttribute("alt");
+          const dir = alt === "price-up" ? "🔼" : "🔽";
 
-      return {
-        price: priceEl.innerText.trim(),
-        change,
-        dir,
-      };
-    };
+          return {
+            price: priceEl.innerText.trim(),
+            change,
+            dir,
+          };
+        };
 
-    const date = document.querySelector("#metal-price-date")?.innerText.trim();
+        const date = document.querySelector("#metal-price-date")?.innerText.trim();
 
-    return {
-      date,
-      gold24: get("24K-price"),
-      gold22: get("22K-price"),
-      gold18: get("18K-price"),
-    };
-  });
+        return {
+          date,
+          gold24: get("24K-price"),
+          gold22: get("22K-price"),
+          gold18: get("18K-price"),
+        };
+      });
 
-  await context.close();
-  return data;
+      await context.close();
+      return data;
+  } catch (error) {
+      console.error("Scraping failed:", error);
+      await context.close();
+      throw error; // Rethrow so main() knows it failed
+  }
 }
 
 function hasChanged(oldData, newData) {
