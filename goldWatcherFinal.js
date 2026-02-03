@@ -88,7 +88,7 @@ async function main() {
     oldData = JSON.parse(fs.readFileSync(FILE));
   }
 
-  if (hasChanged(oldData, newData)) {
+  if (true) {
     const message = `
 🟡 Gold Price Update — ${newData.date}
 
